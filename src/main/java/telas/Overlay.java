@@ -1,7 +1,13 @@
 package telas;
 
+import entities.DadosLooca;
 import entities.Imagens;
-import entities.Registros;
+import entities.RegistrosOverlay;
+import entities.util.HardwareType;
+import entities.util.LogLevel;
+import entities.util.LogManager;
+import registros.CrudChamado;
+import registros.InsertLooca;
 
 import javax.swing.*;
 import java.awt.*;
@@ -24,76 +30,111 @@ public class Overlay extends JFrame {
     public JLabel gpuFreq;
     public JLabel gpuTemp;
     private JLabel data;
-    private JLabel estado;
+    private JLabel disco;
     private JLabel latencia;
-    private JLabel pacote;
+    private JLabel ram;
     private JPanel REDE;
+    private static String apelido;
+    private static boolean verificador = true;
+    public static final LogManager logManager = new LogManager();
 
+    public static String getApelido() {
+        return apelido;
+    }
 
     public void ExibirValores() {
-        Registros registros = new Registros();
-
+        RegistrosOverlay registrosOverlay = new RegistrosOverlay();
         new Timer().scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                data.setText((String.valueOf(registros.data())));
+                data.setText((String.valueOf(registrosOverlay.data())));
 
                 estadoCpu();
                 estadoGpu();
-
-                //estado conexao ja valida os dois abaixo
                 estadoConexao();
-                latencia.setText(String.valueOf(registros.redeLatencia()));
-                pacote.setText(String.valueOf(registros.redePacote()));
-
+                estadoRam();
+                estadoDisco();
             }
         }, 0, 1000);
     }
 
-    // validação para saber o estado de rede
+    // estado conexao
     public void estadoConexao() {
-        Registros registros = new Registros();
+        RegistrosOverlay registrosOverlay = new RegistrosOverlay();
 
-        Integer lat = registros.redeLatencia();
-        Integer pac = registros.redePacote();
+        Integer lat = registrosOverlay.redeLatencia();
 
-        if ((lat <= 20) && (pac <= 2)) {
-            estado.setText("Excelente");
-            estado.setForeground(Color.GREEN);
-        } else if ((lat <= 50) && (pac <= 10)) {
-            estado.setText("Mais ou menos");
-            estado.setForeground(Color.orange);
-        } else {
-            estado.setText("Ruim");
-            estado.setForeground(Color.RED);
-        }
+        latencia.setText(String.valueOf(lat));
 
         if (lat <= 20) {
             latencia.setForeground(Color.GREEN);
-        } else if ((lat <= 50) && (pac <= 10)) {
+        } else if ((lat <= 50)) {
             latencia.setForeground(Color.orange);
+            logManager.setLog("Latência da rede acima do ideal", LogLevel.AVISO, HardwareType.REDE, lat.toString());
         } else {
             latencia.setForeground(Color.RED);
+            logManager.setLog("limite de latência da rede alcançado", LogLevel.PERIGO, HardwareType.REDE, lat.toString());
         }
+    }
 
-        if ((pac <= 2)) {
+    // validação para estado da ram
+    public void estadoRam() {
+        RegistrosOverlay registrosOverlay = new RegistrosOverlay();
 
-            pacote.setForeground(Color.GREEN);
-        } else if ((pac <= 10)) {
+        // pegando o valor do return e colocando em uma variavel
+        Integer ram = registrosOverlay.ram();
 
-            pacote.setForeground(Color.orange);
+        // plotar valores na label
+        this.ram.setText(String.valueOf(ram));
+
+        if (ram < 70) {
+            // Estou importando o jlabel para que possa ser trocado sua cor
+            this.ram.setForeground(Color.GREEN);
+
+        } else if (ram < 90) {
+
+            this.ram.setForeground(Color.ORANGE);
+            logManager.setLog("uso de RAM fora do ideal", LogLevel.AVISO, HardwareType.RAM, ram.toString());
+
         } else {
-            pacote.setForeground(Color.RED);
+            this.ram.setForeground(Color.RED);
+            logManager.setLog("uso de RAM muito acima do ideal", LogLevel.PERIGO, HardwareType.RAM, ram.toString());
+        }
+    }
+
+
+    // validação para estado do disco
+    public void estadoDisco() {
+        RegistrosOverlay registrosOverlay = new RegistrosOverlay();
+
+        // pegando o valor do return e colocando em uma variavel
+        Integer disco = registrosOverlay.disco();
+
+        // plotar valores na label
+        this.disco.setText(String.valueOf(disco));
+
+        if (disco < 50) {
+            // Estou importando o jlabel para que possa ser trocado sua cor
+            this.disco.setForeground(Color.GREEN);
+
+        } else if (disco < 85) {
+
+            this.disco.setForeground(Color.ORANGE);
+            logManager.setLog("uso do DISCO fora do ideal", LogLevel.AVISO, HardwareType.DISCO, disco.toString());
+
+        } else {
+            this.disco.setForeground(Color.RED);
+            logManager.setLog("uso do DISCO muito acima do ideal", LogLevel.PERIGO, HardwareType.DISCO, disco.toString());
         }
     }
 
     // validação para estado da cpu
     public void estadoCpu() {
-        Registros registros = new Registros();
+        RegistrosOverlay registrosOverlay = new RegistrosOverlay();
 
         // pegando o valor do return e colocando em uma variavel
-        Integer temperatura = registros.cpuTemp();
-        Integer frequencia = registros.cpuFrequencia();
+        Integer temperatura = registrosOverlay.cpuTemp();
+        Integer frequencia = registrosOverlay.cpuFrequencia();
 
         // plotar valores na label
         cpuTemp.setText(String.valueOf(temperatura));
@@ -107,10 +148,11 @@ public class Overlay extends JFrame {
         } else if (temperatura < 80) {
 
             cpuTemp.setForeground(Color.ORANGE);
+            logManager.setLog("Temperatura da CPU anormal", LogLevel.AVISO, HardwareType.CPU, temperatura.toString());
 
         } else {
             cpuTemp.setForeground(Color.RED);
-            //  JOptionPane.showMessageDialog(null, String.format("Temperatura da CPU muito alta %d", temperatura));
+            logManager.setLog("Temperatura da CPU muito acima do ideal", LogLevel.PERIGO, HardwareType.CPU, temperatura.toString());
         }
 
         if (frequencia < 30) {
@@ -121,18 +163,19 @@ public class Overlay extends JFrame {
         } else if (frequencia < 70) {
 
             cpuFreq.setForeground(Color.ORANGE);
-
+            logManager.setLog("Frequência da CPU anormal", LogLevel.AVISO, HardwareType.CPU, frequencia.toString());
         } else {
             cpuFreq.setForeground(Color.red);
+            logManager.setLog("Frequência da CPU muito acima do ideal", LogLevel.PERIGO, HardwareType.CPU, frequencia.toString());
         }
     }
 
     // validação para estado da gpu
     public void estadoGpu() {
-        Registros registros = new Registros();
+        RegistrosOverlay registrosOverlay = new RegistrosOverlay();
 
-        Integer temperatura = registros.gpuTemp();
-        Integer frequencia = registros.gpuFrequencia();
+        Integer temperatura = registrosOverlay.gpuTemp();
+        Integer frequencia = registrosOverlay.gpuFrequencia();
 
         gpuTemp.setText(String.valueOf(temperatura));
         gpuFreq.setText(String.valueOf(frequencia));
@@ -144,9 +187,12 @@ public class Overlay extends JFrame {
         } else if (temperatura < 80) {
 
             gpuTemp.setForeground(Color.ORANGE);
+            logManager.setLog("Temperatura da GPU muito acima do ideal", LogLevel.PERIGO, HardwareType.GPU, temperatura.toString());
+
 
         } else {
             gpuTemp.setForeground(Color.RED);
+            logManager.setLog("Temperatura da GPU muito acima do ideal", LogLevel.PERIGO, HardwareType.GPU, temperatura.toString());
         }
 
         if (frequencia < 30) {
@@ -157,13 +203,16 @@ public class Overlay extends JFrame {
         } else if (frequencia < 70) {
 
             gpuFreq.setForeground(Color.ORANGE);
+            logManager.setLog("Frequência da CPU anormal", LogLevel.AVISO, HardwareType.CPU, frequencia.toString());
 
         } else {
             gpuFreq.setForeground(Color.red);
+            logManager.setLog("Frequência da GPU muito acima do ideal", LogLevel.PERIGO, HardwareType.GPU, frequencia.toString());
         }
     }
 
     public void Opcao() {
+
         setBackground(Color.green);
         // adicionar imagens
         Imagens img = new Imagens();
@@ -179,7 +228,7 @@ public class Overlay extends JFrame {
         Opcao();
         ExibirValores();
 
-        // formatação do painel
+        // formatação do painelPC
         setUndecorated(true);
         setOpacity(0.7f);
         setBounds(5, 5, 240, 280);
@@ -196,17 +245,50 @@ public class Overlay extends JFrame {
                 navegar.setVisible(true);
             }
         });
-        fechar.addMouseListener(new MouseAdapter() {
+
+        help.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 super.mouseClicked(e);
                 dispose();
+                TelaChamado navegar = new TelaChamado();
+                navegar.setVisible(true);
+            }
+        });
+
+        fechar.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                super.mouseClicked(e);
+                System.exit(0);
             }
         });
     }
 
     public static void main(String[] args) {
+        CrudChamado consultaId = new CrudChamado();
 
-        new Overlay();
+        if (verificador) {
+            InsertLooca insert = new InsertLooca();
+            DadosLooca dados = new DadosLooca();
+
+            verificador = false;
+            apelido = JOptionPane.showInputDialog(null, "Digite o apelido dessa maquina");
+            consultaId.pegarIdPc();
+
+            new Timer().scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+                    try {
+                        logManager.salvarLog(getApelido());
+                        insert.InsertDados(dados);
+                    }catch (NullPointerException e){
+
+                    }
+
+                }
+            }, 0, 6000);
+        }
     }
 }
+
